@@ -12,10 +12,6 @@ GM_addStyle ( `
   .messages-box .message.collapsed {
     display: none;
   }
-
-  #threadsSection .sidebar-item.unread {
-    color: red;
-  }
  ` );
 
 (function() {
@@ -27,15 +23,19 @@ GM_addStyle ( `
     }
 
     document.querySelectorAll('.sidebar-item').forEach((node) => registerRoom(node));
+    currentChannelUrl = window.location.href;
     setupThreadsSection();
     setInterval(updateAllThreads, 2000);
   }
 
+  var currentChannelUrl = window.location.href;
   var threads = {};
 
   function registerRoom(node) {
     node.addEventListener('click', function() {
-      console.log('Room changed');
+      currentChannelUrl = node.querySelector('a').href;
+      console.log('Room changed', currentChannelUrl);
+      setTimeout(updateAllThreads, 200);
     });
   }
 
@@ -60,21 +60,45 @@ GM_addStyle ( `
     threadsSection.innerHTML = '';
 
     for (let [threadId, attrs] of Object.entries(threads)) {
-      var item = document.createElement('LI');
-      item.className = 'sidebar-item sidebar-item--unread js-sidebar-type-c';
-      if (attrs.unreadCount > 0) {
-        item.classList.add('unread');
+      if (attrs.channelUrl == currentChannelUrl) {
+        var item = document.createElement('LI');
+        item.className = 'sidebar-item js-sidebar-type-c';
+        item.onclick = attrs.openThread;
+
+        var messageTop = document.createElement('DIV');
+        messageTop.className = 'sidebar-item__message-top';
+        messageTop.append(document.createTextNode(attrs.topic.substring(0, 26)));
+        item.append(messageTop);
+
+        var badge = document.createElement('SPAN');
+        badge.className = 'badge badge--group-mentions';
+        badge.innerHTML = attrs.unreadCount;
+        var messageBottom = document.createElement('DIV');
+        messageBottom.className = 'sidebar-item__message-bottom';
+        messageBottom.append(badge);
+        item.append(messageBottom);
+
+        if (attrs.unreadCount > 0) {
+          item.classList.add('sidebar-item--unread');
+          badge.classList.add('badge--unread');
+        }
+
+        threadsSection.append(item);
       }
-      item.onclick = attrs.openThread;
-      item.append(document.createTextNode('#' + attrs.channelName + ' / ' + attrs.topic.substring(0, 20) + ": " +
-                                          attrs.unreadCount + '/' + (attrs.replyCount + attrs.unreadCount)));
-      threadsSection.append(item);
     }
   }
 
   function updateAllThreads() {
     document.querySelectorAll('.message-discussion').forEach(updateThread);
     updateThreadsSection();
+  }
+
+  function markThreadButtonRead(node) {
+    node.style.backgroundColor = 'gray';
+  }
+
+  function markThreadButtonUnread(node) {
+    node.style.backgroundColor = 'red';
   }
 
   function updateThread(node) {
@@ -86,26 +110,30 @@ GM_addStyle ( `
     if (threads[threadId] === undefined) {
       // new thread
       threads[threadId] = {replyCount: replyCount,
-                           unreadCount: 0,
+                           unreadCount: replyCount,
+                           channelUrl: currentChannelUrl,
                            channelName: document.querySelector('.rc-header__name').innerText,
-                           topic: node.parentNode.querySelector('.message-body-wrapper .body p').innerText,
+                           topic: node.parentNode.querySelector('.message-body-wrapper .body').textContent.trim(),
                            openThread: function() { openThreadButton.click(); }};
+
+      markThreadButtonUnread(openThreadButton);
 
       openThreadButton.addEventListener('click', function() {
         // mark all as read
         threads[threadId].replyCount = parseInt(node.querySelector('.reply-counter').innerText);
-        node.querySelector('.js-open-thread').style.backgroundColor = 'gray';
+        threads[threadId].unreadCount = 0;
+        markThreadButtonRead(openThreadButton);
       });
 
     } else {
       // existing thread
       if (threads[threadId].replyCount === replyCount) {
         // all up to date
-        threads[threadId].unreadCount = 0;
       } else {
         // new message
-        threads[threadId].unreadCount = replyCount - threads[threadId].replyCount;
-        node.querySelector('.js-open-thread').style.backgroundColor = 'red';
+        threads[threadId].unreadCount = (replyCount - threads[threadId].replyCount) + threads[threadId].unreadCount;
+        threads[threadId].replyCount = replyCount;
+        markThreadButtonUnread(openThreadButton);
       }
     }
   }
