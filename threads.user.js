@@ -70,6 +70,7 @@ GM_addStyle ( `
 
       var messageTop = document.createElement('DIV');
       messageTop.className = 'sidebar-item__message-top';
+      messageTop.title = thread.topic;
       messageTop.append(document.createTextNode(thread.topic.substring(0, 26)));
       item.append(messageTop);
 
