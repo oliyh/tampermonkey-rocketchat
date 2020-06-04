@@ -3,7 +3,7 @@
 ## Installation
 
 1. Install the Tampermonkey or Greasemonkey extension
-2. Install the script via the externsion's UI
+2. Install the script via the extension's UI
 3. Customize the `@match` comment to match your domain e.g. `https://rocketchat.example.com/*`
 
 ## client-inline-images.user.js
