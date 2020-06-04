@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        Rocket Chat thread improvement
 // @namespace   http://tampermonkey.net
-// @version     1.0
+// @version     1.1
 // @description Improve UX of Rocket Chat threads
 // @author      oliyh
 // @match       <your domain here>
@@ -23,18 +23,18 @@ GM_addStyle ( `
     }
 
     document.querySelectorAll('.sidebar-item').forEach((node) => registerRoom(node));
-    currentChannelUrl = window.location.href;
     setupThreadsSection();
     setInterval(updateAllThreads, 2000);
   }
 
-  var currentChannelUrl = window.location.href;
   var threads = {};
+
+  function currentChannelUrl() {
+    return window.location.href;
+  }
 
   function registerRoom(node) {
     node.addEventListener('click', function() {
-      currentChannelUrl = node.querySelector('a').href;
-      console.log('Room changed', currentChannelUrl);
       setTimeout(updateAllThreads, 200);
     });
   }
@@ -59,32 +59,34 @@ GM_addStyle ( `
     // clear all content
     threadsSection.innerHTML = '';
 
-    for (let [threadId, attrs] of Object.entries(threads)) {
-      if (attrs.channelUrl == currentChannelUrl) {
-        var item = document.createElement('LI');
-        item.className = 'sidebar-item js-sidebar-type-c';
-        item.onclick = attrs.openThread;
+    var relevantThreads = Object.values(threads)
+        .filter((t) => t.channelUrl == currentChannelUrl())
+        .sort((a, b) => b.lastUpdate - a.lastUpdate);
 
-        var messageTop = document.createElement('DIV');
-        messageTop.className = 'sidebar-item__message-top';
-        messageTop.append(document.createTextNode(attrs.topic.substring(0, 26)));
-        item.append(messageTop);
+    for (const thread of relevantThreads) {
+      var item = document.createElement('LI');
+      item.className = 'sidebar-item js-sidebar-type-c';
+      item.onclick = thread.openThread;
 
-        var badge = document.createElement('SPAN');
-        badge.className = 'badge badge--group-mentions';
-        badge.innerHTML = attrs.unreadCount;
-        var messageBottom = document.createElement('DIV');
-        messageBottom.className = 'sidebar-item__message-bottom';
-        messageBottom.append(badge);
-        item.append(messageBottom);
+      var messageTop = document.createElement('DIV');
+      messageTop.className = 'sidebar-item__message-top';
+      messageTop.append(document.createTextNode(thread.topic.substring(0, 26)));
+      item.append(messageTop);
 
-        if (attrs.unreadCount > 0) {
-          item.classList.add('sidebar-item--unread');
-          badge.classList.add('badge--unread');
-        }
+      var badge = document.createElement('SPAN');
+      badge.className = 'badge badge--group-mentions';
+      badge.innerHTML = thread.unreadCount;
+      var messageBottom = document.createElement('DIV');
+      messageBottom.className = 'sidebar-item__message-bottom';
+      messageBottom.append(badge);
+      item.append(messageBottom);
 
-        threadsSection.append(item);
+      if (thread.unreadCount > 0) {
+        item.classList.add('sidebar-item--unread');
+        badge.classList.add('badge--unread');
       }
+
+      threadsSection.append(item);
     }
   }
 
@@ -109,11 +111,13 @@ GM_addStyle ( `
 
     if (threads[threadId] === undefined) {
       // new thread
-      threads[threadId] = {replyCount: replyCount,
+      threads[threadId] = {id: threadId,
+                           replyCount: replyCount,
                            unreadCount: replyCount,
-                           channelUrl: currentChannelUrl,
+                           channelUrl: currentChannelUrl(),
                            channelName: document.querySelector('.rc-header__name').innerText,
                            topic: node.parentNode.querySelector('.message-body-wrapper .body').textContent.trim(),
+                           lastUpdate: new Date(),
                            openThread: function() { openThreadButton.click(); }};
 
       markThreadButtonUnread(openThreadButton);
@@ -133,6 +137,7 @@ GM_addStyle ( `
         // new message
         threads[threadId].unreadCount = (replyCount - threads[threadId].replyCount) + threads[threadId].unreadCount;
         threads[threadId].replyCount = replyCount;
+        threads[threadId].lastUpdate = new Date();
         markThreadButtonUnread(openThreadButton);
       }
     }
